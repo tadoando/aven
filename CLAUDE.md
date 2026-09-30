@@ -68,7 +68,7 @@ Funcionalidades:
 - **Botón de mapa**: abre Google Maps con la dirección.
 - **Botón de calendario**: abre Google Calendar con el evento de 2:00 a 6:00 p.m.
 - **Música de fondo**: `<audio id="bgm" src="musica.mp3" loop>`. Empieza con un fundido al tocar la luciérnaga, porque los navegadores no dejan reproducir audio sin un toque del usuario. El volumen se ajusta con `MUSIC_VOLUME` (0.6). Hay un botón flotante abajo a la derecha para silenciar o reactivar. La música se pausa cuando la pestaña queda oculta y el botón se esconde si el archivo no carga.
-- **Formulario de confirmación**: pide nombre y número de personas (1 a 5). Si `SHEETS_URL` tiene valor, envía `{action:"rsvp"}` al Apps Script (POST `text/plain`, `no-cors`, `keepalive`, sin esperar respuesta) y luego abre WhatsApp como siempre. Tiene un campo trampa oculto (`gWebsite`) contra bots. El mensaje de WhatsApp es:
+- **Formulario de confirmación**: pide nombre y número de personas (1 a 5). Si `SHEETS_URL` tiene valor, envía `{action:"rsvp"}` al Apps Script con `navigator.sendBeacon` (y, si falla, con `fetch` `no-cors` + `keepalive`), sin esperar respuesta, y luego abre WhatsApp como siempre. Tiene un campo trampa oculto (`gWebsite`) contra bots. El mensaje de WhatsApp es:
   `¡Hola! Soy {nombre} y confirmo mi asistencia al baby shower de Evangeline 💖 Vamos {n} persona(s).`
 
 ## Lista de invitados (`invitados-evangeline.html`)

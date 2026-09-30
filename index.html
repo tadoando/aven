@@ -264,7 +264,7 @@ form.rsvp .hp{ position:absolute; left:-9999px; width:1px; height:1px; overflow:
   </section>
 
   <section class="info" id="rsvp">
-    <h2>Confirma tu lugar</h2>
+    <h2>Confirma tu asistencia</h2>
     <p>Cuéntanos si vienes para preparar todo con cariño.</p>
     <form class="rsvp" id="rsvpForm" novalidate>
       <label>Tu nombre
@@ -397,13 +397,16 @@ form.rsvp .hp{ position:absolute; left:-9999px; width:1px; height:1px; overflow:
     if (!name){ msg.textContent = "Escribe tu nombre para confirmar."; document.getElementById("gName").focus(); return; }
     // Registro en Google Sheets (no bloquea: WhatsApp se abre de inmediato)
     if (SHEETS_URL) {
-      try {
-        fetch(SHEETS_URL, {
-          method: "POST", mode: "no-cors", keepalive: true,
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "rsvp", name, count: +n, website: document.getElementById("gWebsite").value })
-        }).catch(()=>{});
-      } catch {}
+      const payload = JSON.stringify({ action: "rsvp", name, count: +n, website: document.getElementById("gWebsite").value });
+      // sendBeacon sobrevive aunque el celular deje la página al abrir WhatsApp
+      let sent = false;
+      try { sent = navigator.sendBeacon && navigator.sendBeacon(SHEETS_URL, new Blob([payload], { type: "text/plain;charset=utf-8" })); } catch {}
+      if (!sent) {
+        try {
+          fetch(SHEETS_URL, { method: "POST", mode: "no-cors", keepalive: true,
+            headers: { "Content-Type": "text/plain;charset=utf-8" }, body: payload }).catch(()=>{});
+        } catch {}
+      }
     }
     const text = `¡Hola! Soy ${name} y confirmo mi asistencia al baby shower de Evangeline 💖 Vamos ${n} persona${n==="1"?"":"s"}.`;
     const url = /^\d{8,15}$/.test(WHATSAPP)
