@@ -85,6 +85,14 @@ ul.list li:first-child{ border-top:0; }
 .banner.show{ display:block; }
 .foot{ display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap; align-items:center; margin-top:.8rem; }
 .foot small{ color:var(--muted); }
+.sync{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.sync .state{ font-size:.9rem; font-weight:600; color:var(--muted); }
+.sync .state::before{ content:""; display:inline-block; width:.6rem; height:.6rem; border-radius:50%; background:var(--no); margin-right:.45rem; vertical-align:middle; }
+.sync .state[data-on="true"]::before{ background:var(--ok); }
+.sync form{ display:flex; gap:.5rem; flex:1 1 260px; }
+.sync form input{ margin:0; }
+.sync .acts{ display:flex; gap:.4rem; flex-wrap:wrap; }
+.sync [hidden], .panel[hidden]{ display:none !important; }
 
 @media (max-width:560px){
   form.add{ grid-template-columns:1fr 1fr; }
@@ -102,6 +110,18 @@ ul.list li:first-child{ border-top:0; }
   </header>
 
   <div class="banner" id="banner" role="status"></div>
+
+  <section class="panel sync" id="syncPanel" hidden>
+    <span class="state" id="syncState" data-on="false">Sin conectar a Google Sheets</span>
+    <form id="keyForm" autocomplete="off">
+      <input type="password" id="keyInput" placeholder="Clave de anfitrión" aria-label="Clave de anfitrión" autocomplete="current-password">
+      <button class="btn primary" type="submit">Conectar</button>
+    </form>
+    <div class="acts" id="syncActs" hidden>
+      <button class="btn" type="button" id="refreshBtn">Actualizar</button>
+      <button class="btn" type="button" id="forgetBtn">Olvidar clave</button>
+    </div>
+  </section>
 
   <section class="tally" aria-label="Resumen">
     <div class="main"><b id="t-people">0</b><span>personas confirmadas</span></div>
@@ -164,6 +184,11 @@ ul.list li:first-child{ border-top:0; }
   const banner = msg => { const b=$("banner"); b.textContent = msg||""; b.classList.toggle("show", !!msg); };
 
   // ---------- Almacenamiento ----------
+  // URL de la aplicación web de Apps Script (termina en /exec). Vacío = solo este navegador.
+  const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxSalSOM3v_h3V2Q9153FmoU3V5FfJfziS-zkE9kkwg7adBx5_W97tTfYUfAM11mkQeHw/exec";
+  const KEY_STORE = "evangeline-admin-key";
+  const REFRESH_MS = 30000;
+
   const local = {
     key: "evangeline-guests",
     load(){ try { return JSON.parse(localStorage.getItem(this.key)) || []; } catch { return []; } },
@@ -172,30 +197,85 @@ ul.list li:first-child{ border-top:0; }
     async remove(id){ guests = guests.filter(x=>x.id!==id); this.save(); render(); }
   };
 
-  function useLocal(){
+  function useLocal(msg){
     store = local; guests = local.load(); render();
-    banner("La lista se está guardando solo en este navegador. Ábrela desde claude.ai con tu cuenta para guardarla en la nube.");
+    banner(msg || "La lista se está guardando solo en este navegador.");
+  }
+
+  // Google Sheets
+  const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } };
+  const setKey = k => { try { k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); } catch {} };
+  let adminKey = "", timer = null;
+
+  async function api(action, extra){
+    const res = await fetch(SHEETS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, key: adminKey, ...extra })
+    });
+    const data = await res.json();
+    if (!data.ok) { const e = new Error(data.error || "error"); e.code = data.error; throw e; }
+    return data;
+  }
+
+  const sheets = {
+    async load(){
+      const { guests: rows } = await api("list");
+      guests = rows.map(g => ({ ...g, count: +g.count || 1 }));
+      render();
+    },
+    async put(g){
+      const i = guests.findIndex(x=>x.id===g.id); i>=0 ? guests[i]=g : guests.push(g); render();
+      const { guest } = await api("put", { guest: g });
+      const j = guests.findIndex(x=>x.id===g.id); if (j>=0) guests[j] = { ...guests[j], ...guest };
+      render();
+    },
+    async remove(id){
+      guests = guests.filter(x=>x.id!==id); render();
+      await api("remove", { id });
+    }
+  };
+
+  const offline = { async put(){ throw new Error("sin conexión"); }, async remove(){ throw new Error("sin conexión"); } };
+
+  function setConnected(on){
+    $("syncState").dataset.on = String(on);
+    $("syncState").textContent = on ? "Conectada a Google Sheets" : "Sin conectar a Google Sheets";
+    $("keyForm").hidden = on; $("syncActs").hidden = !on;
+  }
+
+  async function connect(key){
+    adminKey = key;
+    try {
+      await sheets.load();
+      setKey(key); store = sheets; setConnected(true); banner("");
+      clearInterval(timer);
+      timer = setInterval(() => { if (!document.hidden && !editing) sheets.load().catch(()=>{}); }, REFRESH_MS);
+    } catch (e) {
+      adminKey = ""; setConnected(false);
+      if (e.code === "unauthorized") { setKey(""); banner("La clave no es correcta."); }
+      else if (e.code === "admin_key_not_configured") banner("Falta configurar ADMIN_KEY en las propiedades del script.");
+      else banner("No se pudo conectar con Google Sheets. Revisa tu conexión e inténtalo otra vez.");
+      guests = []; render();
+    }
   }
 
   async function init(){
     render();
-    const db = window.claude && window.claude.use ? await window.claude.use("db") : null;
-    if (!db){ useLocal(); return; }
-    const col = db.collection("guests");
-    store = {
-      async put(g){ const { id, ...data } = g; await col.doc(id).set(data); },
-      async remove(id){ await col.doc(id).delete(); }
-    };
-    col.onSnapshot(snap => {
-      guests = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      banner(""); render();
-    }, err => {
-      if (err && (err.code === "not_granted" || err.code === "permission_denied")) {
-        banner("No tienes permiso para ver esta lista. Pídele a quien la creó que te comparta el acceso como editor.");
-      } else {
-        banner("No se pudo cargar la lista. Recarga la página para intentarlo de nuevo.");
-      }
+    if (!SHEETS_URL){ useLocal(); return; }
+    $("syncPanel").hidden = false;
+    store = offline;
+    $("keyForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const k = $("keyInput").value.trim(); if (!k) { $("keyInput").focus(); return; }
+      $("keyInput").value = ""; connect(k);
     });
+    $("refreshBtn").onclick = () => sheets.load().then(()=>banner("")).catch(()=>banner("No se pudo actualizar la lista."));
+    $("forgetBtn").onclick = () => { setKey(""); adminKey = ""; clearInterval(timer); guests = []; render(); setConnected(false); store = offline; banner("Escribe la clave de anfitrión para ver y editar la lista."); };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && store === sheets) sheets.load().catch(()=>{}); });
+    const saved = getKey();
+    if (saved) connect(saved);
+    else banner("Escribe la clave de anfitrión para ver y editar la lista.");
   }
 
   // ---------- Formulario ----------
@@ -223,7 +303,7 @@ ul.list li:first-child{ border-top:0; }
     };
     $("saveBtn").disabled = true;
     try { await store.put(g); banner(""); resetForm(); $("fName").focus(); }
-    catch { banner("No se pudo guardar. Revisa tu conexión e inténtalo otra vez."); }
+    catch { banner("No se pudo guardar. Revisa tu conexión e inténtalo otra vez."); if (store === sheets) sheets.load().catch(()=>{}); }
     finally { $("saveBtn").disabled = false; }
   });
 
@@ -306,17 +386,17 @@ ul.list li:first-child{ border-top:0; }
   });
 
   // ---------- Exportar ----------
-  (async () => {
-    const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
-    if (!dl) return;
-    $("exportBtn").hidden = false;
-    $("exportBtn").onclick = async () => {
-      const rows = [["Nombre","Personas","Estado","Nota"], ...guests.slice().sort((a,b)=>a.name.localeCompare(b.name,"es")).map(g=>[g.name,g.count,g.status,g.note||""])];
-      const csv = "\ufeff" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
-      try { await dl.save({ filename:"invitados-evangeline.csv", data:csv }); }
-      catch { /* el visitante canceló o no se pudo guardar */ }
-    };
-  })();
+  $("exportBtn").hidden = false;
+  $("exportBtn").onclick = () => {
+    const rows = [["Nombre","Personas","Estado","Nota"], ...guests.slice().sort((a,b)=>a.name.localeCompare(b.name,"es")).map(g=>[g.name,g.count,g.status,g.note||""])];
+    const cell = v => { v = String(v); if (/^[=+\-@]/.test(v)) v = "'" + v; return `"${v.replace(/"/g,'""')}"`; };
+    const csv = "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8" }));
+    a.download = "invitados-evangeline.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
 
   init();
 })();

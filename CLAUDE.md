@@ -19,6 +19,7 @@ Todo está hecho en HTML, CSS y JavaScript sin frameworks. Cada página es un so
 | `index.html` | Invitación pública para enviar a los invitados |
 | `musica.mp3` | Música de fondo de la invitación (MP3, 59 s, 128 kbps, en bucle) |
 | `luciernaga.webp` | Ilustración original de la luciérnaga (fuente; ya va incrustada en `index.html`) |
+| `apps-script/Code.gs` | API de invitados en Google Apps Script sobre una hoja de Google Sheets |
 | `invitados-evangeline.html` | Lista de invitados, de uso privado de los anfitriones |
 
 Publicación:
@@ -67,7 +68,7 @@ Funcionalidades:
 - **Botón de mapa**: abre Google Maps con la dirección.
 - **Botón de calendario**: abre Google Calendar con el evento de 2:00 a 6:00 p.m.
 - **Música de fondo**: `<audio id="bgm" src="musica.mp3" loop>`. Empieza con un fundido al tocar la luciérnaga, porque los navegadores no dejan reproducir audio sin un toque del usuario. El volumen se ajusta con `MUSIC_VOLUME` (0.6). Hay un botón flotante abajo a la derecha para silenciar o reactivar. La música se pausa cuando la pestaña queda oculta y el botón se esconde si el archivo no carga.
-- **Formulario de confirmación**: pide nombre y número de personas (1 a 5) y abre WhatsApp con este mensaje:
+- **Formulario de confirmación**: pide nombre y número de personas (1 a 5). Si `SHEETS_URL` tiene valor, envía `{action:"rsvp"}` al Apps Script (POST `text/plain`, `no-cors`, `keepalive`, sin esperar respuesta) y luego abre WhatsApp como siempre. Tiene un campo trampa oculto (`gWebsite`) contra bots. El mensaje de WhatsApp es:
   `¡Hola! Soy {nombre} y confirmo mi asistencia al baby shower de Evangeline 💖 Vamos {n} persona(s).`
 
 ## Lista de invitados (`invitados-evangeline.html`)
@@ -87,17 +88,27 @@ Funcionalidades:
 - **Exportar CSV**: separador `;` y BOM UTF-8 para que Excel lo abra bien.
 
 Almacenamiento:
-- Usa `localStorage` con la clave `evangeline-guests`: los datos quedan solo en el navegador donde se abre (también en GitHub Pages).
-- El código aún tiene la ruta de `claude.use("db")`/`claude.use("downloads")`, pero ya no se usa porque la página no está publicada en claude.ai.
+- **Con `SHEETS_URL`** (constante al inicio del script): la hoja de Google Sheets es la fuente de la lista. Se entra con la clave de anfitrión, que se guarda en `localStorage` (`evangeline-admin-key`) del dispositivo. La lista se refresca cada 30 s y al volver a la pestaña. El botón "Olvidar clave" la borra.
+- **Sin `SHEETS_URL`**: usa `localStorage` con la clave `evangeline-guests`, solo en ese navegador.
+- **CSV**: se descarga con un Blob, con separador `;`, BOM UTF-8 y protección contra fórmulas.
+
+## Google Sheets + Apps Script (`apps-script/Code.gs`)
+
+- **Hoja `Invitados`**: columnas `id, nombre, personas, estado, nota, origen, creado, actualizado`. Se crea sola la primera vez.
+- **Acciones**: todas son POST con JSON en `text/plain`.
+  - `rsvp`: pública. Si el nombre ya existe (sin importar mayúsculas ni tildes), actualiza la fila en lugar de duplicarla y la marca como confirmado.
+  - `list`, `put`, `remove`: exigen `key`, que se compara con la propiedad `ADMIN_KEY` del script (mínimo 12 caracteres).
+- **Seguridad**: la clave nunca va en el repositorio. Las escrituras usan `LockService` y los textos se escapan contra inyección de fórmulas.
+- **Despliegue**: Aplicación web, ejecutar como "yo", acceso "cualquier usuario". La URL `/exec` va en `SHEETS_URL` en `index.html` y en `invitados-evangeline.html`. Si se cambia el código, hay que hacer una nueva versión en "Gestionar implementaciones" para mantener la misma URL.
 
 ## Limitaciones conocidas
 
-- **Registro de invitados**: los invitados no pueden anotarse solos en la lista, porque no hay una base compartida (solo `localStorage`). El flujo actual es: el invitado confirma por WhatsApp y el anfitrión pega el mensaje en la lista.
+- **Privacidad de la lista**: `invitados-evangeline.html` está en GitHub Pages, pero sin la clave no muestra ni modifica datos.
+- **Confirmaciones sin respuesta**: el envío a Sheets es `no-cors`, así que la invitación no sabe si llegó. WhatsApp sigue como respaldo y la confirmación se puede pegar a mano.
 - **Tipografías sin internet**: las fuentes se cargan desde Google Fonts, así que sin conexión se usan fuentes de respaldo.
 - **Dirección en el mapa**: falta verificar que el punto de Google Maps caiga en la casa correcta.
 
 ## Ideas para siguientes pasos
 
-- **Registro automático**: que las confirmaciones lleguen solas a una base propia, con un Google Form, Google Sheets + Apps Script o un backend pequeño.
 - **Dominio corto**: apuntar un dominio propio a GitHub Pages.
 - **Vista previa en WhatsApp**: agregar la imagen de vista previa (Open Graph) para cuando se comparta el enlace.

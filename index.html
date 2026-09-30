@@ -170,6 +170,7 @@ form.rsvp input, form.rsvp select{
   border-radius:1rem; border:1.5px solid var(--petal); background:var(--paper); color:var(--ink);
 }
 form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
+form.rsvp .hp{ position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
 .msg{ min-height:1.4em; font-size:.95rem; text-align:center; margin:.4rem 0 0; }
 
 .closing{ font-family:"Cormorant Garamond", Georgia, serif; font-style:italic; font-size:1.45rem; line-height:1.4; margin:2.2rem auto 0; max-width:26ch; }
@@ -274,6 +275,7 @@ form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
           <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
         </select>
       </label>
+      <div class="hp" aria-hidden="true"><label>No llenar <input type="text" id="gWebsite" tabindex="-1" autocomplete="off"></label></div>
       <button class="btn primary" type="submit">💌 Confirmar por WhatsApp</button>
       <p class="msg" id="rsvpMsg" role="status"></p>
     </form>
@@ -294,6 +296,8 @@ form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
   const WHATSAPP = "573114591946";          // número con indicativo, sin + ni espacios
   const EVENT = new Date("2026-10-11T14:00:00-05:00");
   const ADDRESS = "Calle 5A Sur #18-60, Barrio La Veredita, Soacha, Cundinamarca";
+  // URL de la aplicación web de Apps Script (termina en /exec). Vacío = solo WhatsApp.
+  const SHEETS_URL = "https://script.google.com/macros/s/AKfycbxSalSOM3v_h3V2Q9153FmoU3V5FfJfziS-zkE9kkwg7adBx5_W97tTfYUfAM11mkQeHw/exec";
   /* ============================ */
 
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -391,6 +395,16 @@ form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
     const name = document.getElementById("gName").value.trim();
     const n = document.getElementById("gCount").value;
     if (!name){ msg.textContent = "Escribe tu nombre para confirmar."; document.getElementById("gName").focus(); return; }
+    // Registro en Google Sheets (no bloquea: WhatsApp se abre de inmediato)
+    if (SHEETS_URL) {
+      try {
+        fetch(SHEETS_URL, {
+          method: "POST", mode: "no-cors", keepalive: true,
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "rsvp", name, count: +n, website: document.getElementById("gWebsite").value })
+        }).catch(()=>{});
+      } catch {}
+    }
     const text = `¡Hola! Soy ${name} y confirmo mi asistencia al baby shower de Evangeline 💖 Vamos ${n} persona${n==="1"?"":"s"}.`;
     const url = /^\d{8,15}$/.test(WHATSAPP)
       ? `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(text)}`
