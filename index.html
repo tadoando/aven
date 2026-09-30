@@ -141,6 +141,27 @@ h1{
 .btn.primary:hover{ background:var(--wine); border-color:var(--wine); }
 @keyframes beckon{ 50%{ box-shadow:0 0 22px 4px rgba(246,237,168,.9); } }
 .btn:focus-visible, input:focus-visible, select:focus-visible{ outline:3px solid var(--sky); outline-offset:3px; }
+/* ---------- Música ---------- */
+.music{
+  position:fixed; z-index:40; right:max(14px, env(safe-area-inset-right,0px)); bottom:max(14px, env(safe-area-inset-bottom,0px));
+  width:48px; height:48px; border-radius:50%; border:1.5px solid var(--petal); cursor:pointer;
+  display:grid; place-items:center; color:var(--rose); background:var(--card);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 4px 14px rgba(110,42,58,.15);
+  opacity:0; pointer-events:none; transition:opacity .6s, transform .15s;
+}
+body.ready .music{ opacity:1; pointer-events:auto; }
+.music:active{ transform:scale(.94); }
+.music:focus-visible{ outline:3px solid var(--sky); outline-offset:3px; }
+.music svg{ width:22px; height:22px; }
+.music .off{ display:none; }
+.music[aria-pressed="false"] .on{ display:none; }
+.music[aria-pressed="false"] .off{ display:block; }
+.music[aria-pressed="true"]::after{
+  content:""; position:absolute; inset:-5px; border-radius:50%; border:1.5px solid var(--petal);
+  animation:pulse 2.4s ease-out infinite;
+}
+@keyframes pulse{ from{ transform:scale(.9); opacity:.9; } to{ transform:scale(1.35); opacity:0; } }
+@media (prefers-reduced-motion: reduce){ .music[aria-pressed="true"]::after{ animation:none; display:none; } }
 
 form.rsvp{ display:grid; gap:.7rem; max-width:340px; margin:1rem auto 0; text-align:left; }
 form.rsvp label{ font-size:.92rem; font-weight:600; }
@@ -261,6 +282,12 @@ form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
   <p class="closing">¡Te esperamos para compartir esta gran alegría con nosotros! 👶💖</p>
 </main>
 
+<audio id="bgm" src="musica.mp3" preload="auto" loop></audio>
+<button type="button" class="music" id="musicBtn" aria-pressed="false" aria-label="Activar música">
+  <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+  <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="m16 9 5 6M21 9l-5 6"/></svg>
+</button>
+
 <script>
 (() => {
   /* ======= CONFIGURACIÓN ======= */
@@ -290,8 +317,44 @@ form.rsvp .btn{ justify-self:center; margin-top:.4rem; }
   const intro = document.getElementById("intro");
   const main = document.getElementById("main");
   let opened = false;
+  // Música de fondo (arranca con el toque de la luciérnaga, que cuenta como gesto del usuario)
+  const MUSIC_VOLUME = 0.6;
+  const bgm = document.getElementById("bgm");
+  const musicBtn = document.getElementById("musicBtn");
+  let wantMusic = false, fadeTimer = null;
+  function setMusicUI(on){
+    musicBtn.setAttribute("aria-pressed", String(on));
+    musicBtn.setAttribute("aria-label", on ? "Silenciar música" : "Activar música");
+  }
+  function fadeTo(target, ms, done){
+    clearInterval(fadeTimer);
+    const start = bgm.volume, steps = Math.max(1, Math.round(ms/50)); let i = 0;
+    fadeTimer = setInterval(()=>{
+      i++; bgm.volume = Math.min(1, Math.max(0, start + (target-start)*i/steps));
+      if (i >= steps){ clearInterval(fadeTimer); done && done(); }
+    }, 50);
+  }
+  function playMusic(){
+    wantMusic = true; setMusicUI(true);
+    bgm.volume = 0;
+    const p = bgm.play();
+    if (p && p.catch) p.catch(()=>{ wantMusic = false; setMusicUI(false); });
+    fadeTo(MUSIC_VOLUME, 1800);
+  }
+  function stopMusic(){
+    wantMusic = false; setMusicUI(false);
+    fadeTo(0, 400, ()=> bgm.pause());
+  }
+  musicBtn.addEventListener("click", ()=> wantMusic ? stopMusic() : playMusic());
+  bgm.addEventListener("error", ()=>{ musicBtn.hidden = true; });
+  document.addEventListener("visibilitychange", ()=>{
+    if (document.hidden) bgm.pause();
+    else if (wantMusic) bgm.play().catch(()=>{});
+  });
+
   function open(){
     if (opened) return; opened = true;
+    playMusic();
     intro.classList.add("lit");
     burst(innerWidth/2, innerHeight*0.45, 70);
     setTimeout(()=>{

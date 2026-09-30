@@ -17,6 +17,7 @@ Todo está hecho en HTML, CSS y JavaScript sin frameworks. Cada página es un so
 | Archivo | Qué es |
 |---|---|
 | `index.html` | Invitación pública para enviar a los invitados |
+| `musica.mp3` | Música de fondo de la invitación (MP3, 59 s, 128 kbps, en bucle) |
 | `luciernaga.webp` | Ilustración original de la luciérnaga (fuente; ya va incrustada en `index.html`) |
 | `invitados-evangeline.html` | Lista de invitados, de uso privado de los anfitriones |
 
@@ -65,6 +66,7 @@ Funcionalidades:
 - **Cuenta regresiva**: al llegar la fecha cambia a "¡Es hoy!" y luego a "¡Gracias por acompañarnos!".
 - **Botón de mapa**: abre Google Maps con la dirección.
 - **Botón de calendario**: abre Google Calendar con el evento de 2:00 a 6:00 p.m.
+- **Música de fondo**: `<audio id="bgm" src="musica.mp3" loop>`. Empieza con un fundido al tocar la luciérnaga, porque los navegadores no dejan reproducir audio sin un toque del usuario. El volumen se ajusta con `MUSIC_VOLUME` (0.6). Hay un botón flotante abajo a la derecha para silenciar o reactivar. La música se pausa cuando la pestaña queda oculta y el botón se esconde si el archivo no carga.
 - **Formulario de confirmación**: pide nombre y número de personas (1 a 5) y abre WhatsApp con este mensaje:
   `¡Hola! Soy {nombre} y confirmo mi asistencia al baby shower de Evangeline 💖 Vamos {n} persona(s).`
 
@@ -99,4 +101,3 @@ Almacenamiento:
 - **Registro automático**: que las confirmaciones lleguen solas a una base propia, con un Google Form, Google Sheets + Apps Script o un backend pequeño.
 - **Dominio corto**: apuntar un dominio propio a GitHub Pages.
 - **Vista previa en WhatsApp**: agregar la imagen de vista previa (Open Graph) para cuando se comparta el enlace.
-- **Música de fondo opcional**: con un botón de silencio.
